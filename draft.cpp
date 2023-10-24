@@ -436,27 +436,31 @@ void soft_infer(network &Alarm){
 		vector<float> cpt = it->working_CPT;
 		vector<string> value = it->get_values();
 
-		vector<int> missing_index = cpt_for_missing_data[i];
+		// vector<int> missing_index = cpt_for_missing_data[i];
 		vector<float> prob;
-		for( auto j : missing_index){
+		for( auto j : cpt_for_missing_data[i]){
 			prob.push_back(cpt[j]);
 		}
 		int k = 0 ;
-		float random_number = rand() % 100000;
-		random_number = (float)random_number/100000;
+		float random_number = rand();
+		float random_number2 = (float)random_number/RAND_MAX;
+		// float random_number2 = 0.0001;
 
 		float total_prob = 0;
 		for(auto elm : prob){
 			total_prob+=elm;
 		}
-		random_number = random_number * total_prob;
+
+		random_number2 = random_number2 * total_prob;
+		// cout<<(random_number2<total_prob)<<endl;
 
 		float running_sum = 0;
-		while(running_sum<random_number){
+		while(running_sum<random_number2){
 			running_sum+=prob[k];
 			k++;
 		}
 		k--;
+		// cout<< (k<prob.size()) << endl;
 		running_data[i][wildy] = value_index[wildy][value[k]];
 
 	}
@@ -504,6 +508,10 @@ int main()
 		end = chrono :: high_resolution_clock :: now();
 
 	}
+
+
+
+
 
 	for(int i = 0 ; i < Alarm.netSize() ; i++){
 		it = Alarm.search_node(node_name[i]);
