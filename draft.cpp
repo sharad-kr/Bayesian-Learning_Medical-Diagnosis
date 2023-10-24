@@ -397,7 +397,11 @@ void learn(network &Alarm){
 
 		for(int i1 = 0 ; i1<CPT_table.size() ; i1++){
 			if(CPT_table[i1]==-1){
-				CPT_table[i1] = (float)query[i1]/evidence[i1 % (total_size/k)];
+				float a = (float)query[i1]/evidence[i1 % (total_size/k)];
+				int b = a * 10000;
+				a = (float)b/10000;
+				CPT_table[i1] = a;
+
 				}
 			}
 		it->set_working_CPT(CPT_table);
@@ -502,16 +506,12 @@ int main()
 
 	start = chrono :: high_resolution_clock :: now();
 
-	while(chrono::duration_cast<chrono::milliseconds>(end-start).count()<40000){
+	while(chrono::duration_cast<chrono::milliseconds>(end-start).count()<5000){
 		learn(Alarm);
 		soft_infer(Alarm);
 		end = chrono :: high_resolution_clock :: now();
 
 	}
-
-
-
-
 
 	for(int i = 0 ; i < Alarm.netSize() ; i++){
 		it = Alarm.search_node(node_name[i]);
