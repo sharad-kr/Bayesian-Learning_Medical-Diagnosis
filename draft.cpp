@@ -7,7 +7,7 @@
 #include <cstdlib>
 // #include<bits/stdc++.h>
 #include<map>
-
+#include<iomanip>
 #include<chrono>
 
 using namespace std;
@@ -20,7 +20,8 @@ vector<string> node_name(37); 			    // this is index ----> node mapping , rever
 vector<int> wild_in_data;				    // at index i : contains the node whose value_assignment is missing in i_th data in raw_data.
 vector<map<string,int>> value_assignment;	// this contains the value_assignment of each data except for the wild position.
 map<string,int> valuesPerVariable;			// this contains the cardinality of set of values a node can have.
-vector<vector<int>> cpt_for_missing_data;   
+vector<vector<int>> cpt_for_missing_data;  
+vector<vector<float>> CPT; 
 
 
 // Our graph consists of a list of nodes where each node is represented as follows:
@@ -470,6 +471,39 @@ void soft_infer(network &Alarm){
 	}
 }
 
+//plag point !!!
+void writeData(){
+		// write the CPT in solved_alarm.bif
+		ifstream input("alarm.bif");
+		ofstream out;
+		out.open("solved_alarm.bif");
+		if (!input.is_open()) return ;
+		while (!input.eof()){
+			string line, temp, var_name;
+			getline(input, line);
+			stringstream stream;
+			stream.str(line);
+			stream >> temp;
+			if (temp.compare("probability") == 0){
+				stream >> temp; // simply '(' 
+				stream >> temp; // the variable name 
+				int current_id = node_index[temp]; // the node number in the mapping
+				out << line << endl;
+				getline(input, line);
+				out << "\ttable ";
+				for (int i=0; i<CPT[current_id].size(); i++) out << fixed << setprecision(4) << max((float)0.0001, CPT[current_id][i]) << " ";
+				out << ";" << endl;
+			}
+			else if (temp.compare("") == 0) out << line; //THIS LINE ALONE FUCKED IT ALL !!
+			else out << line << endl; // have to check for output conditions here !!
+
+		}
+		out.close();
+		input.close();
+
+		// cout << "written to solved_alarm.bif sucessfully" << endl;
+	}
+
 
 int main()
 {
@@ -488,7 +522,7 @@ int main()
 
 	auto start = chrono :: high_resolution_clock :: now();
 	process_data(Alarm);
-	cout<<"Data processed !"<<endl;
+	// cout<<"Data processed !"<<endl;
 
 	auto end = chrono :: high_resolution_clock :: now();
 
@@ -505,22 +539,25 @@ int main()
 	}
 
 	start = chrono :: high_resolution_clock :: now();
-
-	while(chrono::duration_cast<chrono::milliseconds>(end-start).count()<5000){
+	int iter = 0;
+	while(iter < 3){
 		learn(Alarm);
 		soft_infer(Alarm);
 		end = chrono :: high_resolution_clock :: now();
 
-	}
 
-	for(int i = 0 ; i < Alarm.netSize() ; i++){
-		it = Alarm.search_node(node_name[i]);
-		vector<float> cpt = it->working_CPT;
-		for(auto i : cpt){
-			cout<< i << " ";
+		iter ++;
+		cout << iter << endl;
+}
+
+		for(int i = 0 ; i < Alarm.netSize() ; i++){
+			it = Alarm.search_node(node_name[i]);
+			vector<float> cpt = it->working_CPT;
+			CPT.push_back(cpt);
 		}
-		cout<<endl;
-	}
+
+		writeData();
+	
 }
 
 
