@@ -16,7 +16,7 @@ vector<vector<string>> raw_data;		    // just fetched the initial data into this
 vector<vector<int>> running_data;	        // this will contain the most updated data while processing.
 vector<map<string,int>> value_index; 	    // each element of this vector is mapping/indexing of the possible values of each node to a number.
 map<string,int> node_index;        		    // this mapping indexes the nodes from 0 to 36.
-vector<string> node_name(37); 			    // this is index ----> node mapping , reverse for node_index.
+vector<string> node_name; 			    // this is index ----> node mapping , reverse for node_index.
 vector<int> wild_in_data;				    // at index i : contains the node whose value_assignment is missing in i_th data in raw_data.
 vector<map<string,int>> value_assignment;	// this contains the value_assignment of each data except for the wild position.
 map<string,int> valuesPerVariable;			// this contains the cardinality of set of values a node can have.
@@ -172,12 +172,12 @@ public:
 
 };
 
-network read_network()
+network read_network(string network_name)
 {
 	network Alarm;
 	string line;
 	int find=0;
-  	ifstream myfile("alarm.bif"); 
+  	ifstream myfile(network_name); 
   	string temp;
   	string name;
   	vector<string> values;
@@ -321,49 +321,44 @@ vector<int> cpt_pointer(network &Alarm,int &wild, vector<int> &value_map , vecto
 }
 
 
-void process_data(network &Alarm){
-	ifstream file("records.dat");
+void process_data(network &Alarm, string p){
+	ifstream file(p);
 	string temp;
 	string line;
-	while(!file.eof()){
+	while(getline(file, line)){
 		vector<string> tempv;
 		vector<int> tempv2;
-		map<string,int> tempv3;
+		// map<string,int> tempv3;
 		int k = 0;
 		stringstream ss;
-		getline(file, line);
+		
 		ss.str(line);
+		bool found = 0;
 		// int count_idx = 0;
 		while(ss >> temp){
 			tempv.push_back(temp);
 			if(temp.compare("\"?\"")==0){
+				found = 1;
 				wild_in_data.push_back(k);
 				list<Graph_Node>::iterator it = Alarm.search_node(node_name[k]);
-				tempv2.push_back(value_index[k][(it->get_values())[0]]);
+				tempv2.push_back(0);
 			} 
 			else{
-				tempv3[node_name[k]] = value_index[k][temp]; 
+				// tempv3[node_name[k]] = value_index[k][temp]; 
 				tempv2.push_back(value_index[k][temp]);
 			}
 			
 			k++;
 		}
-		value_assignment.push_back(tempv3);
+		if(!found) wild_in_data.push_back(-1);
+		// value_assignment.push_back(tempv3);
 		raw_data.push_back(tempv);
 		running_data.push_back(tempv2);
 
 	}
 
 
-	for(int i = 0 ; i<wild_in_data.size() ; i++){
-		int wild = wild_in_data[i];
-		map<string,int> tempv4;
-		vector<string> par = Alarm.search_node(node_name[wild])->get_Parents();
-		for(string parent : par){
-			tempv4[parent] = value_assignment[i][parent];
-		}
-		value_assignment[i] = tempv4;
-	}
+
 
 file.close();
 }
@@ -371,6 +366,7 @@ file.close();
 
 
 void learn(network &Alarm){
+	bool ver = 0;
 	list<Graph_Node> :: iterator it,it2;
 
 	for(int i = 0 ; i<Alarm.netSize() ; i++){
@@ -384,10 +380,11 @@ void learn(network &Alarm){
 
 		int k = it->get_nvalues();
 		total_size = total_size * k;
-		vector<int> query(total_size,0);
-		vector<int> evidence(total_size/k,1);
+		vector<float> query(total_size,0);
+		vector<float> evidence(total_size/k,0.01);
 		vector<string> par = it->get_Parents();
 		for(int j = 0 ; j<running_data.size() ; j++){
+			// int idx_query =0;
 			int idx_query = cpt_index(i,running_data[j][i],running_data[j], par );
 			int idx_evidence = idx_query % (total_size / k) ; 
 			query[idx_query]++;
@@ -399,35 +396,40 @@ void learn(network &Alarm){
 		for(int i1 = 0 ; i1<CPT_table.size() ; i1++){
 			if(CPT_table[i1]==-1){
 				float a = (float)query[i1]/evidence[i1 % (total_size/k)];
-				int b = a * 10000;
-				a = (float)b/10000;
+				// int b = a * 10000;
+				// a = (float)b/10000;
+				if(CPT_table[i1]!=a) ver = 1;
 				CPT_table[i1] = a;
 
 				}
 			}
 		it->set_working_CPT(CPT_table);
 	}
+	// cout<<ver<<endl;
 }
 
 
 void hard_infer(network &Alarm){
 	for(int i = 0 ; i < wild_in_data.size() ; i++){
-		int wildy = wild_in_data[i];
-		list<Graph_Node>::iterator it;
-		it = Alarm.search_node(node_name[wildy]);
-		vector<float> cpt = it->working_CPT;
-		vector<string> value = it->get_values();
-		int k = 0 ;
-		vector<int> prob = cpt_for_missing_data[i];
-		float maxi = cpt[prob[0]];
-		for(int j = 0 ; j<prob.size() ; j++){
-			if(cpt[prob[j]]>maxi){
-				maxi=cpt[prob[j]];
-				k=j;
+		if(wild_in_data[i]!=-1){
+			int wildy = wild_in_data[i];
+			list<Graph_Node>::iterator it;
+			it = Alarm.search_node(node_name[wildy]);
+			vector<float> cpt = it->working_CPT;
+			vector<string> value = it->get_values();
+			int k = 0 ;
+			vector<int> prob = cpt_for_missing_data[i];
+			float maxi = cpt[prob[0]];
+			for(int j = 0 ; j<prob.size() ; j++){
+				if(cpt[prob[j]]>maxi){
+					maxi=cpt[prob[j]];
+					k=j;
+				}
 			}
+			// cout<<k<<endl;
+			running_data[i][wildy] = value_index[wildy][value[k]];
 		}
-		// cout<<k<<endl;
-		running_data[i][wildy] = value_index[wildy][value[k]];
+
 
 	}
 }
@@ -435,84 +437,113 @@ void hard_infer(network &Alarm){
 void soft_infer(network &Alarm){
 	srand(time(0));
 	for(int i = 0 ; i < wild_in_data.size() ; i++){
-		int wildy = wild_in_data[i];
-		list<Graph_Node>::iterator it;
-		it = Alarm.search_node(node_name[wildy]);
-		vector<float> cpt = it->working_CPT;
-		vector<string> value = it->get_values();
+		if(wild_in_data[i]!=-1){
+			int wildy = wild_in_data[i];
+			list<Graph_Node>::iterator it;
+			it = Alarm.search_node(node_name[wildy]);
+			vector<float> cpt = it->working_CPT;
+			vector<string> value = it->get_values();
 
-		// vector<int> missing_index = cpt_for_missing_data[i];
-		vector<float> prob;
-		for( auto j : cpt_for_missing_data[i]){
-			prob.push_back(cpt[j]);
+			// vector<int> missing_index = cpt_for_missing_data[i];
+			vector<float> prob;
+			for( auto j : cpt_for_missing_data[i]){
+				prob.push_back(cpt[j]);
+			}
+			int k = 0 ;
+			float random_number = rand();
+			float random_number2 = (float)random_number/RAND_MAX;
+			// float random_number2 = 0.0001;
+
+			float total_prob = 0;
+			for(auto elm : prob){
+				total_prob+=elm;
+			}
+
+			random_number2 = random_number2 * total_prob;
+			// cout<<(random_number2<total_prob)<<endl;
+
+			float running_sum = 0;
+			while(running_sum<random_number2){
+				running_sum+=prob[k];
+				k++;
+			}
+			k--;
+			// cout<< (k<prob.size()) << endl;
+			running_data[i][wildy] = value_index[wildy][value[k]];
 		}
-		int k = 0 ;
-		float random_number = rand();
-		float random_number2 = (float)random_number/RAND_MAX;
-		// float random_number2 = 0.0001;
-
-		float total_prob = 0;
-		for(auto elm : prob){
-			total_prob+=elm;
-		}
-
-		random_number2 = random_number2 * total_prob;
-		// cout<<(random_number2<total_prob)<<endl;
-
-		float running_sum = 0;
-		while(running_sum<random_number2){
-			running_sum+=prob[k];
-			k++;
-		}
-		k--;
-		// cout<< (k<prob.size()) << endl;
-		running_data[i][wildy] = value_index[wildy][value[k]];
 
 	}
 }
 
-//plag point !!!
-void writeData(){
-		// write the CPT in solved_alarm.bif
-		ifstream input("alarm.bif");
-		ofstream out;
-		out.open("solved_alarm.bif");
-		if (!input.is_open()) return ;
-		while (!input.eof()){
-			string line, temp, var_name;
-			getline(input, line);
-			stringstream stream;
-			stream.str(line);
-			stream >> temp;
-			if (temp.compare("probability") == 0){
-				stream >> temp; // simply '(' 
-				stream >> temp; // the variable name 
-				int current_id = node_index[temp]; // the node number in the mapping
-				out << line << endl;
-				getline(input, line);
-				out << "\ttable ";
-				for (int i=0; i<CPT[current_id].size(); i++) out << fixed << setprecision(4) << max((float)0.0001, CPT[current_id][i]) << " ";
-				out << ";" << endl;
+void solved(network &Alarm, string network_name){
+
+ 	ifstream inp(network_name); 
+ 	ofstream otp("solved_alarm.bif");
+  	string temp;
+  	string name;
+  	string line;
+  	list<Graph_Node> :: iterator it;
+  	// vector<string> values;
+  	
+
+    	while (! inp.eof() )
+    	{
+    		stringstream ss;
+      		getline (inp,line);
+      		
+      		
+      		ss.str(line);
+     		ss>>temp;
+     		
+
+
+     		if(temp.compare("probability")==0)
+     		{
+                    otp<<line<<endl;
+     				ss>>temp;
+     				ss>>temp;
+     				it = Alarm.search_node(temp);
+     				otp<<"\ttable ";
+     				vector<float> cpt_array = it->working_CPT;
+     				for(float k : cpt_array){
+     					otp<<fixed<<setprecision(4)<<max((float)0.0001,k)<<" ";
+     				}
+     				otp<<";"<<endl;
+     				getline(inp,line);
+
+
+     				
 			}
-			else if (temp.compare("") == 0) out << line; //THIS LINE ALONE FUCKED IT ALL !!
-			else out << line << endl; // have to check for output conditions here !!
+     		else if(line.compare("")==0){
+     			// otp<<line;
+     		}
+     		else
+     		{
+     			otp<<line<<endl;
+			
+     		}
 
 		}
-		out.close();
-		input.close();
 
-		// cout << "written to solved_alarm.bif sucessfully" << endl;
+	inp.close();
+	otp.close();
 	}
 
 
-int main()
+int main(int argv , char* argc[])
 {
+
+
+	string record = (string)argc[2];
+	string network_name = (string)argc[1];
+	
 	network Alarm;
-	Alarm=read_network();
+	Alarm=read_network(network_name);
 	
 	list<Graph_Node> :: iterator it,it2;
 	int idx = 0;
 	list<Graph_Node> node_list = Alarm.Pres_Graph;
+	node_name.resize(Alarm.netSize());
 	for(it = node_list.begin() ; it != node_list.end() ; it++){
 		node_index[it->get_name()] = idx;
 		node_name[idx] = it->get_name();
@@ -520,34 +551,43 @@ int main()
 	}
 
 
-	auto start = chrono :: high_resolution_clock :: now();
-	process_data(Alarm);
-	// cout<<"Data processed !"<<endl;
 
-	auto end = chrono :: high_resolution_clock :: now();
+	process_data(Alarm,record);
 
-	
-
+vector<int> a(1,0);
+cpt_for_missing_data.resize(running_data.size(),a);
 	for(int i = 0 ; i<wild_in_data.size() ; i++){
-		int wild_position = wild_in_data[i];
-		list<Graph_Node> :: iterator it2;
-		it2 = Alarm.search_node(node_name[wild_position]);
-		vector<string> par = it2->get_Parents();
-		
-		vector<int> cpt_ptr = cpt_pointer(Alarm,wild_position,running_data[i],par);
-		cpt_for_missing_data.push_back(cpt_ptr);
+		// vector<int> tempi(1,-1);
+		if(wild_in_data[i]!=-1){
+			int wild_position = wild_in_data[i];
+			list<Graph_Node> :: iterator it2;
+			it2 = Alarm.search_node(node_name[wild_position]);
+			vector<string> par = it2->get_Parents();
+			
+			vector<int> cpt_ptr = cpt_pointer(Alarm,wild_position,running_data[i],par);
+			cpt_for_missing_data[i]=cpt_ptr;
+
+		}
+
+
 	}
 
-	start = chrono :: high_resolution_clock :: now();
-	int iter = 0;
-	while(iter < 3){
+auto start = chrono :: high_resolution_clock :: now();
+auto end = chrono :: high_resolution_clock :: now();
+int iter = 0;
+	while(chrono :: duration_cast <chrono::milliseconds> (end-start).count() < 105000){
+	// while(iter<10){
+		iter++;
+		// cout << iter <<" " ;
 		learn(Alarm);
 		soft_infer(Alarm);
+		// hard_infer(Alarm);
+
 		end = chrono :: high_resolution_clock :: now();
 
 
-		iter ++;
-		cout << iter << endl;
+		
+
 }
 
 		for(int i = 0 ; i < Alarm.netSize() ; i++){
@@ -556,10 +596,12 @@ int main()
 			CPT.push_back(cpt);
 		}
 
-		writeData();
+		// writeData();
+		solved(Alarm, network_name);
+
+
 	
 }
-
 
 
 
